@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JmoLasik</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f3f5f9;color:#202633}
+header{background:#123d70;color:white;padding:20px}
+header h2{margin:0;font-size:23px}
+header p{margin:6px 0 0;font-size:13px}
+main{max-width:1200px;margin:auto;padding:16px}
+.card{background:white;padding:16px;border-radius:12px;box-shadow:0 2px 10px #0001}
+.search{width:100%;padding:14px;border:1px solid #ddd;border-radius:8px;font-size:15px;margin-bottom:12px}
+.info{font-size:13px;color:#666;margin-bottom:12px}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:950px}
+th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;font-size:13px;white-space:nowrap}
+th{background:#eaf1fa;color:#123d70}
+.empty{text-align:center;color:#777;padding:25px}
+footer{text-align:center;color:#777;font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+
+<header>
+<h2>JmoLasik</h2>
+<p>Informasi Data JmoLasik</p>
+</header>
+
+<main>
+<div class="card">
+
+<input class="search" id="cari"
+placeholder="Cari Kode, Kabupaten, Kecamatan, KPJ..."
+oninput="tampilkan()">
+
+<div class="info" id="jumlah">Memuat data...</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Kode</th>
+<th>Kab</th>
+<th>Kec</th>
+<th>Kel</th>
+<th>Saldo</th>
+<th>IUT</th>
+<th>GEN</th>
+<th>Tanggal Lahir</th>
+<th>PT</th>
+<th>KPJ</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody id="hasil">
+<tr><td colspan="11" class="empty">Belum ada data.</td></tr>
+</tbody>
+</table>
+</div>
+
+</div>
+</main>
+
+<footer>JmoLasik © 2026</footer>
+
+<script>
+const data = [];
+
+const kolom = [
+"K ode","Kab","Kec","Kel","Saldo","IUT",
+"GEN","Tanggal Lahir","PT","KPJ","Status"
+];
+
+function aman(nilai){
+ const el=document.createElement("span");
+ el.textContent=nilai ?? "";
+ return el.innerHTML;
+}
+
+function tampilkan(){
+ const cari=document.getElementById("cari")
+ .value.toLowerCase().trim();
+
+ const hasil=data.filter(item =>
+   Object.values(item).some(nilai =>
+     String(nilai ?? "").toLowerCase().includes(cari)
+   )
+ );
+
+ document.getElementById("jumlah").textContent =
+ hasil.length+" data ditemukan";
+
+ document.getElementById("hasil").innerHTML =
+ hasil.length
+ ? hasil.map(item =>
+   "<tr>"+kolom.map(k =>
+   "<td>"+aman(item[k.trim()])+"</td>"
+   ).join("")+"</tr>"
+   ).join("")
+ : '<tr><td colspan="11" class="empty">Data tidak ditemukan</td></tr>';
+}
+
+tampilkan();
+</script>
+
+</body>
+</html>
