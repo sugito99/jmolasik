@@ -1,63 +1,490 @@
 
-rules_version = '2';
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JmoLasik</title>
 
-service cloud.firestore {
-  match /databases/{database}/documents {
+  <style>
+    * { box-sizing: border-box; }
 
-    function signedIn() {
-      return request.auth != null;
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      background: #f3f5f9;
+      color: #202124;
     }
 
-    function isAdmin() {
-      return signedIn()
-        && exists(
-          /databases/$(database)/documents/admins/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/admins/$(request.auth.uid)
-        ).data.role == "admin";
+    .container {
+      max-width: 760px;
+      margin: auto;
     }
 
-    // DATA JMOLASIK
-    match /data_jmolasik/{documentId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+    header {
+      background: #173f73;
+      color: white;
+      padding: 20px;
+      border-radius: 14px;
+      margin-bottom: 16px;
     }
 
-    // ADMIN
-    match /admins/{uid} {
-      allow get: if signedIn() && request.auth.uid == uid;
-      allow list, create, update, delete: if false;
+    header h1 {
+      margin: 0 0 6px;
+      font-size: 23px;
     }
 
-    // PRODUK
-    match /produk/{id} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+    header p {
+      margin: 0;
+      font-size: 13px;
+      opacity: .9;
     }
 
-    // PESANAN
-    match /pesanan/{id} {
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.nama is string
-        && request.resource.data.nama.size() > 0
-        && request.resource.data.nama.size() <= 100
-        && request.resource.data.telepon is string
-        && request.resource.data.telepon.size() <= 20
-        && request.resource.data.alamat is string
-        && request.resource.data.alamat.size() <= 500
-        && request.resource.data.jumlah is int
-        && request.resource.data.jumlah > 0
-        && request.resource.data.jumlah <= 1000
-        && request.resource.data.status == "Menunggu"
-        && request.resource.data.createdAt == request.time;
+    input, button {
+      font: inherit;
+    }
 
-      allow read: if isAdmin()
-        || (signedIn()
-        && resource.data.ownerUid == request.auth.uid);
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0;
+      border: 1px solid #ccd2dc;
+      border-radius: 8px;
+      background: white;
+    }
 
-      allow update, delete: if isAdmin();
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 14px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .search {
+      margin-bottom: 12px;
+    }
+
+    .panel, .data-card {
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 13px;
+      box-shadow: 0 2px 8px #0000000d;
+    }
+
+    .panel h3 {
+      margin: 0 0 10px;
+    }
+
+    .primary {
+      background: #173f73;
+      color: white;
+    }
+
+    .secondary {
+      background: #e8edf5;
+      color: #173f73;
+    }
+
+    .danger {
+      background: #ffe8e8;
+      color: #b42318;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .actions button {
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .data-card h3 {
+      margin: 0 0 12px;
+      color: #173f73;
+      font-size: 17px;
+    }
+
+    .field {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid #edf0f4;
+      font-size: 14px;
+    }
+
+    .field:last-child {
+      border-bottom: 0;
+    }
+
+    .field span:first-child {
+      color: #687386;
+      flex: 0 0 42%;
+    }
+
+    .field strong {
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+
+    #adminPanel {
+      display: none;
+    }
+
+    #message {
+      font-size: 13px;
+      margin: 10px 0;
+      color: #b42318;
+      overflow-wrap: anywhere;
+    }
+
+    .muted {
+      color: #687386;
+      font-size: 13px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <header>
+    <h1>JmoLasik</h1>
+    <p>Informasi data dan pencarian</p>
+  </header>
+
+  <input
+    id="searchInput"
+    class="search"
+    type="search"
+    placeholder="Cari Kode, Kab, Kec, Kel, atau data lainnya..."
+    oninput="renderData()"
+  >
+
+  <div class="panel">
+    <h3>Login Admin</h3>
+    <div id="loginArea">
+      <input id="email" type="email" placeholder="Email admin">
+      <input id="password" type="password" placeholder="Password admin">
+      <button class="primary" onclick="loginAdmin()">Login</button>
+    </div>
+    <div id="adminInfo" class="hidden">
+      <p class="muted">Mode Admin aktif.</p>
+      <button class="secondary" onclick="logoutAdmin()">Logout</button>
+    </div>
+    <div id="message"></div>
+  </div>
+
+  <div id="adminPanel" class="panel">
+    <h3 id="formTitle">Tambah Data</h3>
+    <input id="Kode" placeholder="Kode">
+    <input id="Kab" placeholder="Kab">
+    <input id="Kec" placeholder="Kec">
+    <input id="Kel" placeholder="Kel">
+    <input id="Saldo" placeholder="Saldo">
+    <input id="IUT" placeholder="IUT">
+    <input id="GEN" placeholder="GEN">
+    <input id="Tanggal_Lahir" placeholder="Tanggal Lahir">
+    <input id="PT" placeholder="PT">
+    <input id="KPJ" placeholder="KPJ">
+    <input id="Status" placeholder="Status">
+
+    <div class="actions">
+      <button class="primary" onclick="saveData()">Simpan Data</button>
+      <button class="secondary" onclick="resetForm()">Bersihkan</button>
+    </div>
+  </div>
+
+  <p id="statusInfo" class="muted">Memuat data...</p>
+  <div id="dataList"></div>
+
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+<script>
+  // KONFIGURASI FIREBASE JMOLASIK
+  const firebaseConfig = {
+    apiKey: "AIzaSyD7dhu7KiCEWkyuvdHvg4e8nVDgCLJrtk",
+    authDomain: "jmolasik-df212.firebaseapp.com",
+    projectId: "jmolasik-df212",
+    storageBucket: "jmolasik-df212.firebasestorage.app",
+    messagingSenderId: "716394929936",
+    appId: "1:716394929936:web:4fd24e2b3fdd1b05370f95"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+  const collectionData = db.collection("data_jmolasik");
+
+  const fields = [
+    ["Kode", "Kode"],
+    ["Kab", "Kab"],
+    ["Kec", "Kec"],
+    ["Kel", "Kel"],
+    ["Saldo", "Saldo"],
+    ["IUT", "IUT"],
+    ["GEN", "GEN"],
+    ["Tanggal_Lahir", "Tanggal Lahir"],
+    ["PT", "PT"],
+    ["KPJ", "KPJ"],
+    ["Status", "Status"]
+  ];
+
+  let records = [];
+  let isAdmin = false;
+  let editingId = null;
+
+  function showMessage(text, isError = true) {
+    const el = document.getElementById("message");
+    el.textContent = text;
+    el.style.color = isError ? "#b42318" : "#16803c";
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[char]);
+  }
+
+  async function loadData() {
+    const status = document.getElementById("statusInfo");
+    status.textContent = "Memuat data...";
+
+    try {
+      const snapshot = await collectionData.get();
+
+      records = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      status.textContent = "Jumlah data: " + records.length;
+      renderData();
+
+    } catch (error) {
+      status.textContent = "Gagal memuat data.";
+      showMessage("Kesalahan Firestore: " + error.message);
     }
   }
-}
+
+  function renderData() {
+    const list = document.getElementById("dataList");
+    const keyword = document.getElementById("searchInput")
+      .value.toLowerCase().trim();
+
+    const filtered = records.filter(record =>
+      fields.some(([key]) =>
+        String(record[key] ?? "").toLowerCase().includes(keyword)
+      )
+    );
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="panel">Data tidak ditemukan.</div>';
+      return;
+    }
+
+    list.innerHTML = filtered.map((record, index) => {
+      const title = record.Kode || ("Data " + (index + 1));
+
+      const rows = fields.map(([key, label]) => `
+        <div class="field">
+          <span>${escapeHTML(label)}</span>
+          <strong>${escapeHTML(record[key] ?? "-")}</strong>
+        </div>
+      `).join("");
+
+      const adminButtons = isAdmin ? `
+        <button class="secondary" onclick="editData('${record.id}')">Edit</button>
+        <button class="danger" onclick="deleteData('${record.id}')">Hapus</button>
+      ` : "";
+
+      return `
+        <div class="data-card">
+          <h3>${escapeHTML(title)}</h3>
+          ${rows}
+          <div class="actions">
+            <button class="primary" onclick="copyData('${record.id}')">
+              Salin Data
+            </button>
+            ${adminButtons}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function copyData(id) {
+    const record = records.find(item => item.id === id);
+    if (!record) return;
+
+    const text = fields.map(([key, label]) =>
+      label + ": " + (record[key] ?? "-")
+    ).join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Data berhasil disalin.");
+    } catch (error) {
+      const area = document.createElement("textarea");
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      const success = document.execCommand("copy");
+      area.remove();
+      alert(success ? "Data berhasil disalin." : "Gagal menyalin data.");
+    }
+  }
+
+  async function loginAdmin() {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    if (!email || !password) {
+      showMessage("Isi email dan password admin.");
+      return;
+    }
+
+    try {
+      showMessage("Sedang login...", false);
+      await auth.signInWithEmailAndPassword(email, password);
+    } catch (error) {
+      showMessage("Login gagal: " + error.code + " - " + error.message);
+    }
+  }
+
+  async function logoutAdmin() {
+    await auth.signOut();
+  }
+
+  auth.onAuthStateChanged(async user => {
+    isAdmin = false;
+
+    document.getElementById("adminPanel").style.display = "none";
+    document.getElementById("loginArea").classList.remove("hidden");
+    document.getElementById("adminInfo").classList.add("hidden");
+
+    if (user) {
+      try {
+        const adminDoc = await db.collection("admins").doc(user.uid).get();
+
+        if (adminDoc.exists && adminDoc.data().role === "admin") {
+          isAdmin = true;
+          document.getElementById("adminPanel").style.display = "block";
+          document.getElementById("loginArea").classList.add("hidden");
+          document.getElementById("adminInfo").classList.remove("hidden");
+          showMessage("Login admin berhasil.", false);
+        } else {
+          await auth.signOut();
+          showMessage("Akun ini belum terdaftar sebagai admin.");
+        }
+      } catch (error) {
+        showMessage("Gagal memeriksa admin: " + error.message);
+      }
+    }
+
+    renderData();
+  });
+
+  function getFormData() {
+    const data = {};
+
+    fields.forEach(([key]) => {
+      const inputId = key === "Tanggal_Lahir" ? "Tanggal_Lahir" : key;
+      data[key] = document.getElementById(inputId).value.trim();
+    });
+
+    return data;
+  }
+
+  async function saveData() {
+    if (!isAdmin) {
+      showMessage("Hanya admin yang boleh menyimpan data.");
+      return;
+    }
+
+    const data = getFormData();
+
+    if (!data.Kode) {
+      showMessage("Kode wajib diisi.");
+      return;
+    }
+
+    try {
+      if (editingId) {
+        await collectionData.doc(editingId).update(data);
+        showMessage("Data berhasil diperbarui.", false);
+      } else {
+        await collectionData.add(data);
+        showMessage("Data berhasil ditambahkan.", false);
+      }
+
+      resetForm();
+      await loadData();
+
+    } catch (error) {
+      showMessage("Gagal menyimpan: " + error.message);
+    }
+  }
+
+  function editData(id) {
+    if (!isAdmin) return;
+
+    const record = records.find(item => item.id === id);
+    if (!record) return;
+
+    fields.forEach(([key]) => {
+      document.getElementById(key).value = record[key] ?? "";
+    });
+
+    editingId = id;
+    document.getElementById("formTitle").textContent = "Edit Data";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function deleteData(id) {
+    if (!isAdmin) return;
+    if (!confirm("Yakin ingin menghapus data ini?")) return;
+
+    try {
+      await collectionData.doc(id).delete();
+      showMessage("Data berhasil dihapus.", false);
+      await loadData();
+    } catch (error) {
+      showMessage("Gagal menghapus: " + error.message);
+    }
+  }
+
+  function resetForm() {
+    fields.forEach(([key]) => {
+      document.getElementById(key).value = "";
+    });
+
+    editingId = null;
+    document.getElementById("formTitle").textContent = "Tambah Data";
+  }
+
+  loadData();
+</script>
+</body>
+</html>
